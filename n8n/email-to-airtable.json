@@ -1,0 +1,73 @@
+{
+  "name": "Unificar movimientos",
+  "nodes": [
+    {
+      "parameters": {
+        "protocol": "IMAP",
+        "host": "{{ $env.SANTANDER_IMAP_HOST }}",
+        "user": "{{ $env.SANTANDER_IMAP_USER }}",
+        "password": "{{ $env.SANTANDER_IMAP_PASSWORD }}",
+        "mailbox": "INBOX",
+        "downloadAttachments": false
+      },
+      "name": "Leer emails Santander",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "protocol": "IMAP",
+        "host": "{{ $env.PREX_IMAP_HOST }}",
+        "user": "{{ $env.PREX_IMAP_USER }}",
+        "password": "{{ $env.PREX_IMAP_PASSWORD }}",
+        "mailbox": "INBOX",
+        "downloadAttachments": false
+      },
+      "name": "Leer emails Prex",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 1,
+      "position": [300, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = items.map(item => {\n  const subject = item.json.subject || '';\n  const amountMatch = subject.match(/(-?\d+[.,]\d+)/);\n  const amount = amountMatch ? amountMatch[1].replace(',', '.') : null;\n  return {\n    date: item.json.date,\n    description: subject,\n    amount,\n    source: item.node.name.includes('Santander') ? 'Santander' : 'Prex'\n  };\n});\nreturn data.map(d => ({ json: d }));"
+      },
+      "name": "Normalizar",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [600, 450]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "baseId": "{{ $env.AIRTABLE_BASE_ID }}",
+        "tableId": "{{ $env.AIRTABLE_TABLE_NAME }}",
+        "fieldsUi": {
+          "field": [
+            { "fieldId": "Fecha", "fieldValue": "={{$json[\"date\"]}}" },
+            { "fieldId": "Descripcion", "fieldValue": "={{$json[\"description\"]}}" },
+            { "fieldId": "Monto", "fieldValue": "={{$json[\"amount\"]}}" },
+            { "fieldId": "Origen", "fieldValue": "={{$json[\"source\"]}}" }
+          ]
+        }
+      },
+      "name": "Guardar en Airtable",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [900, 450]
+    }
+  ],
+  "connections": {
+    "Leer emails Santander": {
+      "main": [ [ { "node": "Normalizar", "type": "main", "index": 0 } ] ]
+    },
+    "Leer emails Prex": {
+      "main": [ [ { "node": "Normalizar", "type": "main", "index": 0 } ] ]
+    },
+    "Normalizar": {
+      "main": [ [ { "node": "Guardar en Airtable", "type": "main", "index": 0 } ] ]
+    }
+  },
+  "active": false
+}
